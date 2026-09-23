@@ -1,4 +1,4 @@
-# MO2 Patch Tagger - a Mod Organizer 2 tool that finds the mods that are patches and puts "[Patch] " in front of their names,
+﻿# MO2 Patch Tagger - a Mod Organizer 2 tool that finds the mods that are patches and puts "[Patch] " in front of their names,
 # so MO2 Custom Filters' Keywords tab lists them under [Patch] automatically.
 #
 # The owner, 2026-09-22: "make a mo2 plugin that can rename mods based on their content, what it overwrites and add a
@@ -39,7 +39,7 @@
 #
 # Copyright (C) 2026 ApocryphaRealm. GPL-3.0-or-later - see LICENSE and NOTICE.md.
 
-__version__ = "1.0.0"    # issued by version-gate.ps1; never typed by hand
+__version__ = "1.0.1"    # issued by version-gate.ps1; never typed by hand
 
 import os
 import re
@@ -47,8 +47,8 @@ import struct
 import time
 
 try:
-    from PyQt6.QtCore import Qt
-    from PyQt6.QtGui import QIcon
+    from PyQt6.QtCore import QByteArray, Qt
+    from PyQt6.QtGui import QIcon, QPixmap
     from PyQt6.QtWidgets import (
         QAbstractItemView, QDialog, QDialogButtonBox, QHBoxLayout, QLabel, QMessageBox, QPushButton, QTreeWidget,
         QTreeWidgetItem, QVBoxLayout,
@@ -58,8 +58,8 @@ try:
     _USER = Qt.ItemDataRole.UserRole
     _NO_SELECTION = QAbstractItemView.SelectionMode.NoSelection
 except ImportError:  # MO2 builds that still ship PyQt5
-    from PyQt5.QtCore import Qt
-    from PyQt5.QtGui import QIcon
+    from PyQt5.QtCore import QByteArray, Qt
+    from PyQt5.QtGui import QIcon, QPixmap
     from PyQt5.QtWidgets import (
         QAbstractItemView, QDialog, QDialogButtonBox, QHBoxLayout, QLabel, QMessageBox, QPushButton, QTreeWidget,
         QTreeWidgetItem, QVBoxLayout,
@@ -73,6 +73,29 @@ import mobase
 
 
 PLUGIN_NAME = "MO2 Patch Tagger"
+
+# the toolbar glyph (a 96 px PNG, cream line art in the Njordlinger theme's language), kept inside the one
+# file the plugin is
+_ICON_PNG_B64 = (
+    "iVBORw0KGgoAAAANSUhEUgAAAGAAAABgCAYAAADimHc4AAAEv0lEQVR4nO2cvWsUQRjGnzstRFAwJ5oqJNlLZeUfYKGCtQiBfAkK"
+    "YqxE/CestVEbQfJlJ4KFjQraW1kIXjYpLETyofiBhagMvAvHMTO3e7sz7zu788DCsZPs7T6/+Xzn3Wv1PrxDFJ/ajN8dFQHwK7YA"
+    "ZkUAzIoAmBUBMCsCYFYEwKwIgFkRALMiAGZFAMw6WOBvOwDOAxiHLH0C8ALAL9QYwCSApwCOQKZuA7gK4CNq2gXNCjYf1CpXAUyj"
+    "pgBCGCs6ADZCg5DX2DcIQx2C0EUgahXYETsD4LShTA3OpwbOvQfwCm61BGBMc34PwGIIY0KRWdBbOnQ6aQBwD271nGq8qvn9GqMx"
+    "YR5ACsEKoW+3KSWTd0MdE0IHEDyEOgAIGkJdAAQLoU4AgoRQNwDBQagjgKAgtD3Fae7QodYLvpSGAME1gBkAzyiYN0uf1TlfSqVD"
+    "cAngKK1G+1epx+lcAn9KJUNwCeCcJkQAOrceIbgF8A/AIUt5BqGLhreEtiPzWzn+rgNgrektoV2x8Sbzv9ExqE7TW0K7wgEXBvNV"
+    "bP4aHerzoDpNbglVAFDGnbWYvwxgm45lC4T1JkIoC+AwgBXDgLsP4AYZn2mbzqky3UOv0DUbA6EsANWtnNCcV7X8OoAtTdkWle1p"
+    "ytS1rsCvWCGUBaAGXZ1+DLl2m/5GitgglAXwCMAXzfkJAPcBTGnKpqhsQlOmrvUYDYJQFsBPAJcB/NaUqY3xB5RVl2mSzukyGXbp"
+    "WuqaaAqEKmZBmwBeG7ojZfRDMn6SPpvMX6BrcUdlvUIokpZi01dLWQYh+2zK4dmEO80MBAZVjtMFS0JvSve0polnZRBUeU/KQqzV"
+    "tw4wtQRTzZ+v4kEsSjRR2fEcs60emWxbPM5IAbAzwv/seaj5CS3wdFHZPFIQ5izdUemE4KoAPOmrKbaW4LPmdy3m7xSYbWXdkW1M"
+    "6HID+KypKS0DBB8DbmLov7PvXyw42+oNGZjXRm0JVUZDdbOHwfjQPnO3s1sCvpPZUdX7AbabzPQX4ZnvDIKLDRnbTR5zuKxPHJvv"
+    "BIKrLcl0yBRuo+LsiMST+XmfbzVvVNflprzzKRyT+XmeL3dU13VekOuWkDCZn+kAgO/SM+N6ZIStJXQDNL9L994fbCwc1fWVG1r1"
+    "PDphNn96yDpjKe86w2dyblWzh0SA+RuW7y/0Xprv7OiyEJI6mc+Vnj4qhKRu5nO+H1AUwmHKmOgwRVWdmM/9gkZaAIIp+8JHVNWZ"
+    "+RLekElLjAnBdjuSAOSF8HIg+2In5G5n1N+KcK3pIQ98E8AlAH8A3DWkw/i6l8p+AkESAK8PLuUeJHRBknI1vVcAaQA4IbC0PokA"
+    "OCCwdX1SAfiEwDruSAbgAwL7oC8dgEsI7OaHAsAFBBHmhwSgSghizA8NQBUQRJkfIoAyEMSZHyqAUSCIND9kACDDbNkWG7SLJtZ8"
+    "icG4MmnophdAYNlJW3C8mVPrFpA3A89U8+e4za8LgGEZeKY9ZBE/aVwXAMNagriaX0cAw2ZH7ANuEwCY3unK9pBFmV/le8LS1ANw"
+    "EcAtT3vIjZ6GBq06dkFBKQJgVgTArAiAWREAsyIAZkUAzIoAmBUBMCsCYFYEwKwIALz6D7rcxdBNngaOAAAAAElFTkSuQmCC"
+)
+
 TAG = "[Patch]"
 BASE_MASTERS = {"skyrim.esm", "update.esm", "dawnguard.esm", "hearthfires.esm", "dragonborn.esm"}
 PLUGIN_EXT = (".esp", ".esm", ".esl")
@@ -181,7 +204,14 @@ class MO2PatchTagger(mobase.IPluginTool):
         return "Prefix [Patch] to the mods that call themselves a patch (header, file name, mod name or category)"
 
     def icon(self):
-        return QIcon()
+        # 1.0.1 (the owner, 2026-09-22: "the next versions of our MO2 plugins ... have their own icon within the toolbar dropdown")
+        try:
+            data = QByteArray.fromBase64(_ICON_PNG_B64.encode("ascii"))
+            pix = QPixmap()
+            pix.loadFromData(data, "PNG")
+            return QIcon(pix) if not pix.isNull() else QIcon()
+        except Exception:  # noqa: BLE001
+            return QIcon()
 
     def setParentWidget(self, widget):
         self._parent = widget
@@ -448,3 +478,35 @@ class _PreviewDialog(QDialog):
 
 def createPlugin():
     return MO2PatchTagger()
+
+
+# --- fault handling (standing rule, 2026-09-23: every MO2 plugin of ours logs and arms faulthandler) ---------------
+def _arm_faulthandler():
+    """Arm Python's faulthandler once per process, into plugins\\data\\faults.log. When MO2 dies inside C++ with a
+    Python slot on the stack, the minidump names only modules; faulthandler writes the Python frames of every
+    thread first, so the log names the plugin and the line. Whichever of our plugins loads first arms it."""
+    try:
+        import faulthandler
+        import os
+        import time
+        if faulthandler.is_enabled():
+            return
+        here = os.path.abspath(__file__)
+        while os.path.basename(here).lower() != "plugins":
+            parent = os.path.dirname(here)
+            if parent == here:
+                return
+            here = parent
+        path = os.path.join(here, "data", "faults.log")
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        fh = open(path, "a", encoding="utf-8")
+        who = os.path.basename(os.path.dirname(__file__)) if os.path.basename(__file__) == "__init__.py" else os.path.basename(__file__)
+        fh.write(time.strftime("%Y-%m-%d %H:%M:%S") + " faulthandler armed by " + who + chr(10))
+        fh.flush()
+        globals()["_FAULT_LOG_HANDLE"] = fh          # kept open for the life of the process
+        faulthandler.enable(file=fh, all_threads=True)
+    except Exception:  # noqa: BLE001
+        pass
+
+
+_arm_faulthandler()
