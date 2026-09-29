@@ -1,6 +1,6 @@
 MO2 Patch Tagger
 ================
-Version 1.0.0
+Version 1.0.1
 
 A Mod Organizer 2 tool that finds the mods that call themselves a patch and puts [Patch] in front of
 their names - from a ticked preview, in one pass, and reversibly. With MO2 Custom Filters installed,

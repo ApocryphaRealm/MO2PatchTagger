@@ -248,7 +248,11 @@ class MO2PatchTagger(mobase.IPluginTool):
         org = self._organizer
         mod_list = org.modList()
         mods_dir = org.modsPath()
-        profiles_dir = os.path.join(org.basePath(), "profiles")
+        # every profile, where MO2 keeps them: Profile::renameModInAllProfiles walks Settings::paths().profiles(), which
+        # ModOrganizer.ini's profiles_directory may put anywhere (src/profile.cpp, src/settings.cpp at v2.5.2) - so the
+        # parent of the active profile's folder, never basePath()/profiles (1.0.1: an instance with its profiles in
+        # Mo2/SSE/profiles found none - the same bug as the Nexus report on MO2 Modlist Manager, 2026-09-29)
+        profiles_dir = os.path.dirname(os.path.normpath(org.profilePath()))
         # the priority each mod has now, to check against afterwards
         before = {}
         for old, _new, _why in chosen:
